@@ -1,10 +1,15 @@
 """CPU functionality."""
 import sys
 
+"""
+Binary values listed in spec
+"""
 LDI = 0b10000010
 PRN = 0b01000111
 HLT = 0b00000001
 MUL = 0b10100010
+PUSH = 0b01000101
+POP = 0b01000110
 
 
 class CPU:
@@ -15,6 +20,9 @@ class CPU:
         self.pc = 0  # starts program counter/ instruction pointer
         self.register = [0] * 8  # sets registers R0-R7
         self.ram = [0] * 256  # available memory
+        self.SP = 7  # stack pointer
+        # pointing to R7 and setting it F4 per spec
+        self.register[self.SP] = 0xF4
 
     def ram_read(self, read_address):
         MDR = self.ram[read_address]
@@ -95,6 +103,28 @@ class CPU:
             elif instruction == MUL:
                 self.alu(instruction, operand_a, operand_b)
                 self.pc += 3
+                """
+                Decrement the SP.
+                Copy the value in the given register to the address pointed to SP.
+                """
+            elif instruction == PUSH:
+                # decrement stack pointer
+                self.register[self.SP] -= 1
+                # copy value from register into RAM
+                # store value in the stack
+                self.ram[self.register[self.SP]] = self.register[operand_a]
+                self.pc += 2
+                """
+                Copy the value from the address pointed to by SP to the given register.
+                Increment SP.
+                """
+            elif instruction == POP:
+                # copy value from register into RAM
+                value = self.ram[self.register[self.SP]]
+                self.register[operand_a] = value
+                # increment the stack pointer
+                self.register[self.SP] += 1
+                self.pc += 2
             elif instruction == HLT:
                 break
             else:
