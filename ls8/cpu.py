@@ -10,6 +10,9 @@ HLT = 0b00000001
 MUL = 0b10100010
 PUSH = 0b01000101
 POP = 0b01000110
+CALL = 0b01010000
+RET = 0b00010001
+ADD = 0b10100000
 
 
 class CPU:
@@ -17,21 +20,71 @@ class CPU:
 
     def __init__(self):
         """Construct a new CPU."""
+        self.branchtable = {}
+        self.branchtable[LDI] = self.ldi_handler
+        self.branchtable[PRN] = self.prn_handler
+        self.branchtable[HLT] = self.hlt_handler
+        self.branchtable[MUL] = self.mul_handler
+        self.branchtable[PUSH] = self.push_handler
+        self.branchtable[POP] = self.pop_handler
+        self.branchtable[CALL] = self.call_handler
+        self.branchtable[RET] = self.ret_handler
+        self.branchtable[ADD] = self.add_handler
+        self.running = False
         self.pc = 0  # starts program counter/ instruction pointer
         self.register = [0] * 8  # sets registers R0-R7
         self.ram = [0] * 256  # available memory
-        self.SP = 7  # stack pointer
+        self.pointer = 7  # stack pointer
         # pointing to R7 and setting it F4 per spec
-        self.register[self.SP] = 0xF4
+        self.register[self.pointer] = 0xF4
 
-    def ram_read(self, read_address):
-        MDR = self.ram[read_address]
-        return MDR
+    def ram_read(self, mar):
+        return self.ram[mar]
 
-    def ram_write(self, value, write_address):
-        self.ram[write_address] = value
-        MAR = value
-        return MAR
+    def ram_write(self, mar, mdr):
+        self.ram[mar] = mdr
+
+    def ldi_handler(self, *argv):
+        self.register[argv[0]] = argv[1]
+        self.pc += 3
+
+    def prn_handler(self, *argv):
+        print(self.register[argv[0]])
+        self.pc += 2
+
+    def mul_handler(self, *argv):
+        self.alu(MUL, argv[0], argv[1])
+        self.pc += 3
+
+    def push_handler(self, *argv):
+        self.register[self.pointer] -= 1
+        self.ram[self.register[self.pointer]] = self.register[argv[0]]
+        self.pc += 2
+
+    def pop_handler(self, *argv):
+        stack = self.ram[self.register[self.pointer]]
+        self.register[argv[0]] = stack
+        self.register[self.pointer] += 1
+        self.pc += 2
+
+    def call_handler(self, *argv):
+        self.register[self.pointer] -= 1
+        self.ram[self.register[self.pointer]] = self.pc + 2
+
+        updated_register = self.ram[self.pc + 1]
+        self.pc = self.register[updated_register]
+
+    def ret_handler(self, *argv):
+        self.pc = self.ram[self.register[self.pointer]]
+        self.register[self.pointer] += 1
+
+    def add_handler(self, *argv):
+        self.alu("ADD", argv[0], argv[1])
+        self.pc += 3
+
+    def hlt_handler(self, *argv):
+        self.running = False
+        self.pc += 3
 
     def load(self, filename):
         """Load a program into memory."""
@@ -89,44 +142,14 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
-        while True:
-            # set memory to pointer
+        self.running = True
+        while self.running:
             instruction = self.ram[self.pc]
             operand_a = self.ram_read(self.pc + 1)
             operand_b = self.ram_read(self.pc + 2)
-            if instruction == LDI:
-                self.register[operand_a] = operand_b
-                self.pc += 3
-            elif instruction == PRN:
-                print(self.register[operand_a])
-                self.pc += 2
-            elif instruction == MUL:
-                self.alu(instruction, operand_a, operand_b)
-                self.pc += 3
-                """
-                Decrement the SP.
-                Copy the value in the given register to the address pointed to SP.
-                """
-            elif instruction == PUSH:
-                # decrement stack pointer
-                self.register[self.SP] -= 1
-                # copy value from register into RAM
-                # store value in the stack
-                self.ram[self.register[self.SP]] = self.register[operand_a]
-                self.pc += 2
-                """
-                Copy the value from the address pointed to by SP to the given register.
-                Increment SP.
-                """
-            elif instruction == POP:
-                # copy value from register into RAM
-                value = self.ram[self.register[self.SP]]
-                self.register[operand_a] = value
-                # increment the stack pointer
-                self.register[self.SP] += 1
-                self.pc += 2
-            elif instruction == HLT:
-                break
+
+            if instruction in self.branchtable:
+                self.branchtable[instruction](operand_a, operand_b)
             else:
-                print(f'Not working')
-                sys.exit(1)
+                print('Instruction Not Found')
+                sys.exit()
