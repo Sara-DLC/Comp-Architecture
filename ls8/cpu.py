@@ -13,6 +13,11 @@ POP = 0b01000110
 CALL = 0b01010000
 RET = 0b00010001
 ADD = 0b10100000
+CMP = 0b10100111
+JMP = 0b01010100
+JNE = 0b01010110
+JEQ = 0b01010101
+ADDI = 0b10101110
 
 
 class CPU:
@@ -30,6 +35,11 @@ class CPU:
         self.branchtable[CALL] = self.call_handler
         self.branchtable[RET] = self.ret_handler
         self.branchtable[ADD] = self.add_handler
+        self.branchtable[CMP] = self.cmp_handler
+        self.branchtable[JMP] = self.jmp_handler
+        self.branchtable[JNE] = self.jne_handler
+        self.branchtable[JEQ] = self.jeq_handler
+        self.branchtable[ADDI] = self.addi_handler
         self.running = False
         self.pc = 0  # starts program counter/ instruction pointer
         self.register = [0] * 8  # sets registers R0-R7
@@ -37,6 +47,7 @@ class CPU:
         self.pointer = 7  # stack pointer
         # pointing to R7 and setting it F4 per spec
         self.register[self.pointer] = 0xF4
+        self.flag = [0] * 8  # sets register flag
 
     def ram_read(self, mar):
         return self.ram[mar]
@@ -79,11 +90,34 @@ class CPU:
         self.register[self.pointer] += 1
 
     def add_handler(self, *argv):
-        self.alu("ADD", argv[0], argv[1])
+        self.alu(ADD, argv[0], argv[1])
         self.pc += 3
 
     def hlt_handler(self, *argv):
         self.running = False
+        self.pc += 3
+
+    def cmp_handler(self, *argv):
+        self.alu(CMP, argv[0], argv[1])
+        self.pc += 3
+
+    def jmp_handler(self, *argv):
+        self.pc = self.register[argv[0]]
+
+    def jne_handler(self, *argv):
+        if self.flag[-1] == 0:
+            self.pc = self.register[argv[0]]
+        else:
+            self.pc += 2
+
+    def jeq_handler(self, *argv):
+        if self.flag[-1] == 1:
+            self.pc = self.register[argv[0]]
+        else:
+            self.pc += 2
+
+    def addi_handler(self, *argv):
+        self.alu('ADDI', argv[0], argv[1])
         self.pc += 3
 
     def load(self, filename):
@@ -111,11 +145,26 @@ class CPU:
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
-        if op == "ADD":
+        if op == ADD:
             self.register[reg_a] += self.register[reg_b]
         # elif op == "SUB": etc
         elif op == MUL:
             self.register[reg_a] *= self.register[reg_b]
+        elif op == CMP:
+            if self.register[reg_a] == self.register[reg_b]:
+                self.flag[-1] = 1
+                self.flag[-2] = 0
+                self.flag[-3] = 0
+            elif self.register[reg_a] > self.register[reg_b]:
+                self.flag[-1] = 0
+                self.flag[-2] = 1
+                self.flag[-3] = 0
+            elif self.register[reg_a] < self.register[reg_b]:
+                self.flag[-1] = 0
+                self.flag[-2] = 0
+                self.flag[-3] = 1
+            elif op == ADDI:
+                self.register[reg_a] += reg_b
         else:
             raise Exception("Unsupported ALU operation")
 
